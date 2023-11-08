@@ -30,7 +30,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
 
       - name: Build
-        run: ./gradlew --info -s -x test build
+        run: ./gradlew --info -s -x check build
 
       - name: Test
-        run: ./gradlew --info -s test
+        run: ./gradlew --info -s check
