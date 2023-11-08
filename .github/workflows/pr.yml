@@ -15,8 +15,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - java: 8
-            gradle: 7.4
           - java: 11
             gradle: 7.4
           - java: 17
