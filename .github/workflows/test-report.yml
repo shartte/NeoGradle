@@ -1,7 +1,7 @@
 name: 'Test Report'
 on:
   workflow_run:
-    workflows: ['pr']
+    workflows: ['Build Pull Request']
     types:
       - completed
 permissions:
@@ -18,3 +18,7 @@ jobs:
           name: Tests
           path: '**/*.xml'
           reporter: java-junit
+          # This should not affect the result of the check created
+          # for the origin PR. This just affects this post-processing job itself.
+          fail-on-error: false
+          fail-on-empty: false
