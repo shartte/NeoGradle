@@ -1,7 +1,7 @@
 name: 'Test Report'
 on:
   workflow_run:
-    workflows: ['pr']
+    workflows: ['Build Pull Request']
     types:
       - completed
 permissions:
