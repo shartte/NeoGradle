@@ -11,16 +11,8 @@ on:
 
 jobs:
   build:
-    name: Build (Java ${{ matrix.java }}, Gradle ${{ matrix.gradle }})
+    name: Build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - java: 11
-            gradle: 7.4
-          - java: 17
-            gradle: 7.4
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,19 +20,17 @@ jobs:
           fetch-depth: 1000
           fetch-tags: true
 
-      - name: Setup JDK ${{ matrix.java }}
+      - name: Setup JDK
         uses: actions/setup-java@v2
         with:
-          java-version: ${{ matrix.java }}
+          java-version: '17'
           distribution: 'microsoft'
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: ${{ matrix.gradle }}
 
       - name: Build
-        run: gradle -x test build
+        run: ./gradlew --info -s -x test build
 
       - name: Test
-        run: gradle test
+        run: ./gradlew --info -s test
