@@ -15,7 +15,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - java: [8, 11, 17]
+          - java: 8
+            gradle: 7.4
+          - java: 11
+            gradle: 7.4
+          - java: 17
             gradle: 7.4
     steps:
       - name: Checkout repository
