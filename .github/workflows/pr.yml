@@ -36,8 +36,12 @@ jobs:
         run: ./gradlew --info -s check
 
       # Always upload test results
+      - name: Merge Test Reports
+        if: success() || failure()
+        run: npx junit-report-merger junit.xml "**/TEST-*.xml"
+
       - uses: actions/upload-artifact@v3
         if: success() || failure()
         with:
           name: test-results
-          path: "**/TEST-*.xml"
+          path: junit.xml
