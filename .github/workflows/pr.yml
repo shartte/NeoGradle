@@ -11,8 +11,10 @@ on:
 
 jobs:
   build:
+    name: Build (Java ${{ matrix.java }}, Gradle ${{ matrix.gradle }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - java: 11
