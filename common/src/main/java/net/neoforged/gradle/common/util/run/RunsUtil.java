@@ -80,8 +80,6 @@ public class RunsUtil {
 
                     final DependencyHandler deps = run.getDependencies().get();
 
-                    deps.runtime(deps.configuration(project.getConfigurations().getByName(name + "BootImplementation")));
-
                     suite.useJUnitJupiter();
                     suite.getTargets().configureEach(target -> target.getTestTask().configure(test -> {
                         test.useJUnitPlatform();
