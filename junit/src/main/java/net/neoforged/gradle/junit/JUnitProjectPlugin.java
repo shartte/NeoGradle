@@ -8,6 +8,7 @@ import net.neoforged.gradle.common.util.exceptions.NoDefinitionsFoundException;
 import net.neoforged.gradle.common.util.run.RunsUtil;
 import net.neoforged.gradle.dsl.common.extensions.Minecraft;
 import net.neoforged.gradle.userdev.runtime.definition.UserDevRuntimeDefinition;
+import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
@@ -42,17 +43,37 @@ public class JUnitProjectPlugin implements Plugin<Project> {
             return;
         }
 
-        // Find the runtime reachable via the testRuntimeClasspath
+        configureTestTask(testTask, "junit");
+    }
+
+    /**
+     * Configures a JUnit Test-Task to have the required system properties, environment variables, jvm arguments
+     * and task dependencies to run the JUnit support code from fml-junit.
+     *
+     * @param runType The name of the {@link net.neoforged.gradle.dsl.common.runs.type.RunType} to read
+     *                the properties from.
+     */
+    private static void configureTestTask(Test testTask, String runType) {
+        Project project = testTask.getProject();
+
+        // Find the runtime reachable from the test task
         CommonRuntimeDefinition<?> runtimeDefinition;
         try {
             runtimeDefinition = TaskDependencyUtils.extractRuntimeDefinition(project, testTask);
         } catch (MultipleDefinitionsFoundException e) {
-            throw new RuntimeException(e); // TODO: better error
+            throw new GradleException("Couldn't determine Minecraft runtime definition for JUnit tests", e);
         } catch (NoDefinitionsFoundException e) {
-            throw new RuntimeException(e); // TODO: better error
+            // Try again to see if it's a forge-dev project
+            Object runtimeExtension = project.getExtensions().findByName("runtime");
+            if (runtimeExtension instanceof CommonRuntimeDefinition) {
+                runtimeDefinition = (CommonRuntimeDefinition<?>) runtimeExtension;
+            } else {
+                throw new GradleException("Couldn't determine Minecraft runtime definition for JUnit tests", e);
+            }
         }
 
-        // If it is a userdev runtime, we add the additional testing libraries
+        // If it is a userdev runtime, we automatically add the additional testing libraries declared by the runtime
+        // this will add the FML JUnit support library without the user having to declare it themselves.
         Configuration testRuntimeOnly = project.getConfigurations().getByName("testRuntimeOnly");
         DependencyFactory dependencyFactory = project.getDependencyFactory();
         if (runtimeDefinition instanceof UserDevRuntimeDefinition) {
@@ -63,46 +84,21 @@ public class JUnitProjectPlugin implements Plugin<Project> {
             }
         }
 
-        RunImpl junitRun = project.getObjects().newInstance(RunImpl.class, "junit");
-        junitRun.configure("test");
-        junitRun.configure();
-        runtimeDefinition.configureRun(junitRun);
+        RunImpl junitRun = getOrCreateRun("junitTest", project, runtimeDefinition, runType);
+
+        // Wire up the execution parameters for the Test task with the definitions found in the run
         testTask.getSystemProperties().putAll(junitRun.getSystemProperties().get());
         File argsFile = project.getLayout().getBuildDirectory().file("test_args.txt").get().getAsFile();
-        try {
-            Files.write(argsFile.toPath(), junitRun.getProgramArguments().get(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        testTask.doFirst("writeArgs", task -> {
+            try {
+                Files.write(argsFile.toPath(), junitRun.getProgramArguments().get(), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
         testTask.systemProperty("fml.junit.argsfile", argsFile.getAbsolutePath());
         testTask.getEnvironment().putAll(junitRun.getEnvironmentVariables().get());
-
-//        Configuration testRuntimeClasspath = project.getConfigurations().getByName("testRuntimeClasspath");
-        List<String> jvmArgs = new ArrayList<>(junitRun.getJvmArguments().get());
-//        int modulePathIndex = jvmArgs.indexOf("-p");
-//        if (modulePathIndex == -1) {
-//            modulePathIndex = jvmArgs.indexOf("--module-path");
-//        }
-//        if (modulePathIndex != -1) {
-//            // Convert junit into a module, such that it's visible to both the Gradle test runner, and mods
-//            // running via FMLs transforming class-loader.
-//            List<String> modulePath = new ArrayList<>();
-//            if (modulePathIndex + 1 < jvmArgs.size()) {
-//                Collections.addAll(
-//                        modulePath,
-//                        jvmArgs.remove(modulePathIndex + 1).split(Pattern.quote(File.pathSeparator))
-//                );
-//            }
-//
-//            Set<File> junitApi = testRuntimeClasspath.files(element -> Objects.equals(element.getGroup(), "org.junit.jupiter")
-//                    || Objects.equals(element.getGroup(), "org.junit.platform")
-//                    || Objects.equals(element.getGroup(), "org.opentest4j"));
-//            for (File file : junitApi) {
-//                modulePath.add(file.getAbsolutePath());
-//            }
-//            jvmArgs.add(modulePathIndex + 1, String.join(File.pathSeparator, modulePath));
-//        }
-        testTask.setJvmArgs(jvmArgs);
+        testTask.setJvmArgs(junitRun.getJvmArguments().get());
 
         // Extend MOD_CLASSES with test sources
         List<String> modClassesDirs = new ArrayList<>();
@@ -112,9 +108,21 @@ public class JUnitProjectPlugin implements Plugin<Project> {
         }
         testTask.getEnvironment().put("MOD_CLASSES", String.join(File.pathSeparator, modClassesDirs));
 
-        RunsUtil.addRunSourcesDependenciesToTask(testTask, junitRun);
         for (TaskProvider<? extends Task> taskDependency : junitRun.getTaskDependencies()) {
             testTask.dependsOn(taskDependency);
         }
+    }
+
+    private static RunImpl getOrCreateRun(String runName, Project project, CommonRuntimeDefinition<?> runtimeDefinition, String runType) {
+        // Reuse an existing junitTest run, otherwise create it
+        RunImpl junitRun = (RunImpl) RunsUtil.get(project, runName);
+        if (junitRun == null) {
+            junitRun = project.getObjects().newInstance(RunImpl.class, runName);
+            // Run-Type "junit" must be provided by the runtime or inline in the project
+            junitRun.configure(runType);
+            junitRun.configure();
+            runtimeDefinition.configureRun(junitRun);
+        }
+        return junitRun;
     }
 }
